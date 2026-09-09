@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { ChevronDown, Check, X, Filter, SlidersHorizontal, LayoutGrid, Grid3x3, List } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import currency from 'currency.js';
 import ProductCard from './ProductCard';
 
 interface Product {
@@ -11,12 +10,19 @@ interface Product {
   title: string;
   handle: string;
   description: string;
+  price?: string;
+  image?: string | null;
   productType?: string;
+  vendor?: string;
   variants: {
     edges: Array<{
       node: {
-        price: { amount: string };
+        id: string;
+        price: {
+          amount: string;
+        };
         availableForSale: boolean;
+        quantityAvailable?: number;
       };
     }>;
   };
@@ -34,7 +40,6 @@ interface Product {
 
 interface FilterState {
   categories: string[];
-  colors: string[];
   priceRange: { min: number; max: number };
   inStockOnly: boolean;
 }
@@ -44,54 +49,23 @@ interface ProductsClientProps {
   isFeatured?: boolean;
 }
 
-// Currency options
-const currencies = [
-  { code: 'USD', symbol: '$', rate: 1 },
-  { code: 'EUR', symbol: '€', rate: 0.85 },
-  { code: 'GBP', symbol: '£', rate: 0.73 },
-  { code: 'PKR', symbol: 'Rs', rate: 278 },
-  { code: 'INR', symbol: '₹', rate: 83 },
-  { code: 'JPY', symbol: '¥', rate: 149 },
-  { code: 'CAD', symbol: 'C$', rate: 1.36 },
-  { code: 'AUD', symbol: 'A$', rate: 1.52 },
-];
-
-// Color options
-const colorOptions = [
-  { id: 'black', label: 'Black', color: '#1a1a1a' },
-  { id: 'white', label: 'White', color: '#f5f5f5' },
-  { id: 'red', label: 'Red', color: '#dc2626' },
-  { id: 'blue', label: 'Blue', color: '#2563eb' },
-  { id: 'green', label: 'Green', color: '#16a34a' },
-  { id: 'yellow', label: 'Yellow', color: '#eab308' },
-  { id: 'purple', label: 'Purple', color: '#9333ea' },
-  { id: 'pink', label: 'Pink', color: '#ec4899' },
-  { id: 'orange', label: 'Orange', color: '#f97316' },
-  { id: 'gray', label: 'Gray', color: '#6b7280' },
-  { id: 'brown', label: 'Brown', color: '#8b6914' },
-  { id: 'navy', label: 'Navy', color: '#1e3a5f' },
-  { id: 'teal', label: 'Teal', color: '#0d9488' },
-  { id: 'gold', label: 'Gold', color: '#d4af37' },
-];
-
 export default function ProductsClient({ initialProducts, isFeatured = false }: ProductsClientProps) {
-  // Currency state
-  const [selectedCurrency, setSelectedCurrency] = useState(currencies[0]);
-  const [isCurrencyOpen, setIsCurrencyOpen] = useState(false);
+  // PKR is the only currency
+  const currencySymbol = 'Rs';
+  const currencyRate = 1;
 
   // Find max price
   const maxPrice = useMemo(() => {
     let max = 0;
     initialProducts.forEach(p => {
-      const price = parseFloat(p.variants.edges[0]?.node.price.amount || '0');
+      const price = parseFloat(p.variants?.edges?.[0]?.node?.price?.amount || p.price || '0');
       if (price > max) max = price;
     });
-    return Math.ceil(max / 10) * 10 + 10;
+    return Math.ceil(max / 100) * 100 + 100;
   }, [initialProducts]);
 
   const [filters, setFilters] = useState<FilterState>({
     categories: [],
-    colors: [],
     priceRange: { min: 0, max: maxPrice },
     inStockOnly: false,
   });
@@ -102,8 +76,10 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
   const [sortBy, setSortBy] = useState('featured');
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [visibleProducts, setVisibleProducts] = useState(12);
+  const [loading, setLoading] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
-  const currencyRef = useRef<HTMLDivElement>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   // JS-driven sticky sidebar
   const columnsRef = useRef<HTMLDivElement>(null);
@@ -148,9 +124,6 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
       if (sortRef.current && !sortRef.current.contains(event.target as Node)) {
         setIsSortOpen(false);
       }
-      if (currencyRef.current && !currencyRef.current.contains(event.target as Node)) {
-        setIsCurrencyOpen(false);
-      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -158,7 +131,12 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
 
   // Extract categories from products
   const categories = useMemo(() => {
-    return Array.from(new Set(initialProducts.map(p => p.productType || 'Uncategorized')));
+    const cats = new Set<string>();
+    initialProducts.forEach(p => {
+      const type = p.productType || 'Uncategorized';
+      cats.add(type);
+    });
+    return Array.from(cats);
   }, [initialProducts]);
 
   // Apply filters and sorting
@@ -167,49 +145,38 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
 
     // Category filter
     if (filters.categories.length > 0) {
-      filtered = filtered.filter(p => filters.categories.includes(p.productType || 'Uncategorized'));
-    }
-
-    // Color filter
-    if (filters.colors.length > 0) {
-      filtered = filtered.filter((_, index) => {
-        const colorIndex = index % colorOptions.length;
-        return filters.colors.includes(colorOptions[colorIndex].id);
+      filtered = filtered.filter(p => {
+        const type = p.productType || 'Uncategorized';
+        return filters.categories.includes(type);
       });
     }
 
-    // Price filter
+    // Price filter - in PKR
     filtered = filtered.filter(p => {
-      const price = parseFloat(p.variants.edges[0]?.node.price.amount || '0');
+      const price = parseFloat(p.variants?.edges?.[0]?.node?.price?.amount || p.price || '0');
       return price >= filters.priceRange.min && price <= filters.priceRange.max;
     });
 
     // Stock filter
     if (filters.inStockOnly) {
-      filtered = filtered.filter(p => p.variants.edges[0]?.node.availableForSale);
+      filtered = filtered.filter(p => p.variants?.edges?.[0]?.node?.availableForSale !== false);
     }
 
-    // Sort - FIXED
+    // Sort
     switch (sortBy) {
       case 'price-asc':
         filtered.sort((a, b) => {
-          const aPrice = parseFloat(a.variants.edges[0]?.node.price.amount || '0');
-          const bPrice = parseFloat(b.variants.edges[0]?.node.price.amount || '0');
+          const aPrice = parseFloat(a.variants?.edges?.[0]?.node?.price?.amount || a.price || '0');
+          const bPrice = parseFloat(b.variants?.edges?.[0]?.node?.price?.amount || b.price || '0');
           return aPrice - bPrice;
         });
         break;
       case 'price-desc':
         filtered.sort((a, b) => {
-          const aPrice = parseFloat(a.variants.edges[0]?.node.price.amount || '0');
-          const bPrice = parseFloat(b.variants.edges[0]?.node.price.amount || '0');
+          const aPrice = parseFloat(a.variants?.edges?.[0]?.node?.price?.amount || a.price || '0');
+          const bPrice = parseFloat(b.variants?.edges?.[0]?.node?.price?.amount || b.price || '0');
           return bPrice - aPrice;
         });
-        break;
-      case 'featured':
-        break;
-      case 'newest':
-        break;
-      case 'popular':
         break;
       default:
         break;
@@ -218,6 +185,35 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
     return filtered;
   }, [initialProducts, filters, sortBy]);
 
+  // Lazy loading - Intersection Observer (moved AFTER filteredProducts is defined)
+  useEffect(() => {
+    if (filteredProducts.length <= visibleProducts) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !loading) {
+          setLoading(true);
+          setTimeout(() => {
+            setVisibleProducts(prev => Math.min(prev + 8, filteredProducts.length));
+            setLoading(false);
+          }, 500);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (loadMoreRef.current) {
+      observer.observe(loadMoreRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [filteredProducts.length, visibleProducts, loading]);
+
+  // Reset visible products when filters change
+  useEffect(() => {
+    setVisibleProducts(12);
+  }, [filters, sortBy]);
+
   // Toggle category
   const toggleCategory = (category: string) => {
     setFilters(prev => ({
@@ -225,16 +221,6 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
       categories: prev.categories.includes(category)
         ? prev.categories.filter(c => c !== category)
         : [...prev.categories, category],
-    }));
-  };
-
-  // Toggle color
-  const toggleColor = (colorId: string) => {
-    setFilters(prev => ({
-      ...prev,
-      colors: prev.colors.includes(colorId)
-        ? prev.colors.filter(c => c !== colorId)
-        : [...prev.colors, colorId],
     }));
   };
 
@@ -249,7 +235,6 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
   const clearFilters = () => {
     setFilters({
       categories: [],
-      colors: [],
       priceRange: { min: 0, max: maxPrice },
       inStockOnly: false,
     });
@@ -260,7 +245,6 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (filters.categories.length > 0) count++;
-    if (filters.colors.length > 0) count++;
     if (filters.priceRange.min > 0 || filters.priceRange.max < maxPrice) count++;
     if (filters.inStockOnly) count++;
     return count;
@@ -268,16 +252,18 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
 
   const sortOptions = [
     { value: 'featured', label: 'Featured' },
-    { value: 'newest', label: 'Newest First' },
     { value: 'price-asc', label: 'Price: Low to High' },
     { value: 'price-desc', label: 'Price: High to Low' },
-    { value: 'popular', label: 'Most Popular' },
   ];
 
   const getSortLabel = () => {
     const option = sortOptions.find(o => o.value === sortBy);
     return option ? option.label : 'Sort';
   };
+
+  // Get display products (with lazy loading)
+  const displayProducts = filteredProducts.slice(0, visibleProducts);
+  const hasMore = filteredProducts.length > visibleProducts;
 
   return (
     <div className="relative">
@@ -315,52 +301,29 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
                 {categories.length > 0 && (
                   <FilterSection title="Categories">
                     <div className="space-y-1.5 lg:space-y-2 max-h-48 overflow-y-auto no-scrollbar">
-                      {categories.map(cat => (
-                        <label key={cat} className="flex items-center justify-between cursor-pointer py-1 group">
-                          <span className="text-sm text-zinc-700 group-hover:text-zinc-900">{cat}</span>
-                          <input
-                            type="checkbox"
-                            checked={filters.categories.includes(cat)}
-                            onChange={() => toggleCategory(cat)}
-                            className="w-4 h-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
-                          />
-                        </label>
-                      ))}
+                      {categories.map(cat => {
+                        const count = initialProducts.filter(p => (p.productType || 'Uncategorized') === cat).length;
+                        return (
+                          <label key={cat} className="flex items-center justify-between cursor-pointer py-1 group">
+                            <span className="text-sm text-zinc-700 group-hover:text-zinc-900">{cat}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-zinc-400">{count}</span>
+                              <input
+                                type="checkbox"
+                                checked={filters.categories.includes(cat)}
+                                onChange={() => toggleCategory(cat)}
+                                className="w-4 h-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
+                              />
+                            </div>
+                          </label>
+                        );
+                      })}
                     </div>
                   </FilterSection>
                 )}
 
-                {/* Colors */}
-                <FilterSection title="Colors">
-                  <div className="flex flex-wrap gap-2">
-                    {colorOptions.map((color) => {
-                      const isSelected = filters.colors.includes(color.id);
-                      return (
-                        <button
-                          key={color.id}
-                          onClick={() => toggleColor(color.id)}
-                          className="relative group"
-                          title={color.label}
-                        >
-                          <div
-                            className={`w-8 h-8 rounded-full border-2 transition-all ${
-                              isSelected ? 'border-zinc-900 scale-110' : 'border-zinc-200 hover:border-zinc-400'
-                            }`}
-                            style={{ backgroundColor: color.color }}
-                          />
-                          {isSelected && (
-                            <div className="absolute -top-1 -right-1 bg-zinc-900 text-white rounded-full w-4 h-4 flex items-center justify-center">
-                              <Check className="w-2.5 h-2.5" />
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </FilterSection>
-
-                {/* Price Range */}
-                <FilterSection title="Price">
+                {/* Price Range - in PKR */}
+                <FilterSection title={`Price Range (PKR)`}>
                   <div className="space-y-3">
                     <div className="flex flex-col sm:flex-row gap-3">
                       <div className="flex-1">
@@ -373,7 +336,7 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
                             applyPriceFilter();
                           }}
                           className="w-full mt-1 px-3 py-2 border border-zinc-200 rounded-lg text-sm outline-none focus:border-zinc-900"
-                          placeholder="$0"
+                          placeholder="Rs 0"
                         />
                       </div>
                       <div className="flex-1">
@@ -386,16 +349,10 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
                             applyPriceFilter();
                           }}
                           className="w-full mt-1 px-3 py-2 border border-zinc-200 rounded-lg text-sm outline-none focus:border-zinc-900"
-                          placeholder={`$${maxPrice}`}
+                          placeholder={`Rs ${maxPrice}`}
                         />
                       </div>
                     </div>
-                    <button
-                      onClick={applyPriceFilter}
-                      className="w-full py-2 bg-zinc-100 text-zinc-700 text-sm rounded-lg hover:bg-zinc-200 transition-colors"
-                    >
-                      Apply Price
-                    </button>
                   </div>
                 </FilterSection>
 
@@ -433,41 +390,6 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
             </div>
 
             <div className="flex items-center gap-2 md:gap-3 flex-wrap">
-              {/* Currency Selector */}
-              <div className="relative" ref={currencyRef}>
-                <button
-                  onClick={() => setIsCurrencyOpen(!isCurrencyOpen)}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 rounded-lg transition-colors border border-zinc-200"
-                >
-                  <span>{selectedCurrency.symbol}</span>
-                  <span>{selectedCurrency.code}</span>
-                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isCurrencyOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                {isCurrencyOpen && (
-                  <div className="absolute right-0 mt-1 w-32 bg-white border border-zinc-200 rounded-xl shadow-lg py-1 z-10 max-h-48 overflow-y-auto">
-                    {currencies.map((curr) => (
-                      <button
-                        key={curr.code}
-                        onClick={() => {
-                          setSelectedCurrency(curr);
-                          setIsCurrencyOpen(false);
-                        }}
-                        className={`flex items-center justify-between w-full px-3 py-2 text-sm hover:bg-zinc-50 transition-colors ${
-                          selectedCurrency.code === curr.code ? 'bg-zinc-100' : ''
-                        }`}
-                      >
-                        <span>{curr.symbol}</span>
-                        <span>{curr.code}</span>
-                        {selectedCurrency.code === curr.code && (
-                          <Check className="w-3.5 h-3.5 text-zinc-900" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
               {/* Sort Dropdown */}
               <div className="relative" ref={sortRef}>
                 <button
@@ -507,7 +429,7 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
             </div>
           </div>
 
-          {/* Product grid */}
+          {/* Product grid with lazy loading */}
           <div className={`
             grid gap-3 md:gap-4 lg:gap-6
             ${viewMode === 'grid' 
@@ -515,7 +437,7 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
               : 'grid-cols-1'
             }
           `}>
-            {filteredProducts.length === 0 ? (
+            {displayProducts.length === 0 ? (
               <div className="col-span-full text-center py-12 md:py-20 bg-white rounded-xl">
                 <p className="text-zinc-500">No products found</p>
                 <button onClick={clearFilters} className="mt-4 text-zinc-900 underline text-sm md:text-base">
@@ -523,31 +445,47 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
                 </button>
               </div>
             ) : (
-              filteredProducts.map((p, index) => (
+              displayProducts.map((p, index) => (
                 <motion.div
                   key={p.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05, duration: 0.3 }}
+                  transition={{ delay: Math.min(index * 0.05, 0.5), duration: 0.3 }}
                 >
                   <ProductCard 
                     product={p} 
-                    currencySymbol={selectedCurrency.symbol}
-                    currencyRate={selectedCurrency.rate}
+                    currencySymbol={currencySymbol}
+                    currencyRate={currencyRate}
                   />
                 </motion.div>
               ))
             )}
           </div>
+
+          {/* Load more trigger */}
+          {hasMore && (
+            <div ref={loadMoreRef} className="flex justify-center py-8">
+              {loading ? (
+                <div className="flex items-center gap-2 text-zinc-500">
+                  <div className="w-5 h-5 border-2 border-zinc-300 border-t-zinc-900 rounded-full animate-spin" />
+                  <span>Loading more...</span>
+                </div>
+              ) : (
+                <span className="text-sm text-zinc-400">
+                  Showing {displayProducts.length} of {filteredProducts.length} products
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Mobile View - Responsive Filter Section */}
+      {/* Mobile View */}
       <div className="lg:hidden">
         {/* Toolbar */}
         <div className="flex flex-wrap items-center justify-between gap-2 md:gap-3 mb-4 md:mb-6">
           <div className="flex items-center gap-1 md:gap-2 flex-wrap">
-            {/* View Toggle Buttons - KEEP THESE */}
+            {/* View Toggle Buttons */}
             <div className="flex items-center border border-zinc-200 rounded-lg overflow-hidden bg-white">
               <button
                 onClick={() => setViewMode('grid')}
@@ -571,7 +509,7 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
               </button>
             </div>
 
-            {/* Mobile Filter Button - Opens bottom sheet */}
+            {/* Mobile Filter Button */}
             <button
               onClick={() => setIsMobileFilterOpen(true)}
               className="flex items-center gap-1 md:gap-2 px-2 md:px-4 py-1.5 md:py-2 border border-zinc-200 rounded-lg hover:bg-zinc-50 transition-colors"
@@ -626,7 +564,7 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
           </div>
         </div>
 
-        {/* Product grid - Mobile */}
+        {/* Product grid - Mobile with lazy loading */}
         <div className={`
           grid gap-3 md:gap-4
           ${viewMode === 'grid' 
@@ -634,7 +572,7 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
             : 'grid-cols-1'
           }
         `}>
-          {filteredProducts.length === 0 ? (
+          {displayProducts.length === 0 ? (
             <div className="col-span-full text-center py-12 bg-white rounded-xl">
               <p className="text-zinc-500">No products found</p>
               <button onClick={clearFilters} className="mt-4 text-zinc-900 underline text-sm">
@@ -642,29 +580,44 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
               </button>
             </div>
           ) : (
-            filteredProducts.map((p, index) => (
+            displayProducts.map((p, index) => (
               <motion.div
                 key={p.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05, duration: 0.3 }}
+                transition={{ delay: Math.min(index * 0.05, 0.5), duration: 0.3 }}
               >
                 <ProductCard 
                   product={p} 
-                  currencySymbol={selectedCurrency.symbol}
-                  currencyRate={selectedCurrency.rate}
+                  currencySymbol={currencySymbol}
+                  currencyRate={currencyRate}
                 />
               </motion.div>
             ))
           )}
         </div>
+
+        {/* Load more trigger - Mobile */}
+        {hasMore && (
+          <div ref={loadMoreRef} className="flex justify-center py-8">
+            {loading ? (
+              <div className="flex items-center gap-2 text-zinc-500">
+                <div className="w-5 h-5 border-2 border-zinc-300 border-t-zinc-900 rounded-full animate-spin" />
+                <span>Loading more...</span>
+              </div>
+            ) : (
+              <span className="text-sm text-zinc-400">
+                Showing {displayProducts.length} of {filteredProducts.length} products
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Mobile filter drawer - Bottom Sheet with smooth animation */}
+      {/* Mobile filter drawer */}
       <AnimatePresence>
         {isMobileFilterOpen && (
           <>
-            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -674,7 +627,6 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
               onClick={() => setIsMobileFilterOpen(false)}
             />
             
-            {/* Bottom Sheet */}
             <motion.div
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
@@ -687,7 +639,6 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
               }}
               className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl max-h-[85vh] overflow-y-auto"
             >
-              {/* Handle Bar */}
               <div className="flex justify-center pt-2 pb-1">
                 <div className="w-12 h-1 bg-zinc-300 rounded-full" />
               </div>
@@ -732,38 +683,9 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
                     </div>
                   )}
 
-                  {/* Colors */}
-                  <div>
-                    <h4 className="font-medium mb-2">Colors</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {colorOptions.map((color) => {
-                        const isSelected = filters.colors.includes(color.id);
-                        return (
-                          <button
-                            key={color.id}
-                            onClick={() => toggleColor(color.id)}
-                            className="relative"
-                          >
-                            <div
-                              className={`w-8 h-8 rounded-full border-2 transition-all ${
-                                isSelected ? 'border-zinc-900 scale-110' : 'border-zinc-200'
-                              }`}
-                              style={{ backgroundColor: color.color }}
-                            />
-                            {isSelected && (
-                              <div className="absolute -top-1 -right-1 bg-zinc-900 text-white rounded-full w-4 h-4 flex items-center justify-center">
-                                <Check className="w-2.5 h-2.5" />
-                              </div>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
                   {/* Price */}
                   <div>
-                    <h4 className="font-medium mb-2">Price Range</h4>
+                    <h4 className="font-medium mb-2">Price Range (PKR)</h4>
                     <div className="flex gap-3">
                       <input
                         type="number"

@@ -1,25 +1,30 @@
+// app/page.tsx
 import Link from 'next/link';
 import { fetchProducts } from '@/lib/data-source';
 import ProductCard from '@/components/ProductCard';
 import Hero from '@/components/Hero';
+import ProductsClient from '@/components/ProductsClient';
 
 export default async function Home() {
   const products = await fetchProducts();
 
+  // Hero slides from products
   const heroSlides = products.slice(0, 5).map((product: any) => ({
     id: product.id,
-    title: product.title || 'New Arrival',
+    title: product.title?.split('|')[0]?.trim() || product.title || 'New Arrival',
     subtitle: 'Product',
     description: product.description?.substring(0, 120) || '',
-    image: product.images?.edges?.[0]?.node?.url || '',
+    image: product.images?.edges?.[0]?.node?.url || product.image || '',
     link: `/product/${product.handle}`,
     buttonText: 'View Product',
   }));
 
   return (
     <main className="bg-zinc-50">
+      {/* Hero Section */}
       <Hero slides={heroSlides} autoPlay={true} interval={5000} />
 
+      {/* Products Section with Filtering */}
       <section className="container mx-auto px-4 py-16">
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -27,7 +32,7 @@ export default async function Home() {
               Featured Products
             </h2>
             <p className="text-zinc-500 text-sm mt-1">
-              Handpicked just for you
+              Premium kids wear from TinySoul Pakistan
             </p>
           </div>
           <Link
@@ -41,11 +46,8 @@ export default async function Home() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-8">
-          {products.slice(0, 8).map((product: any) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </div>
+        {/* Products with Filtering - Same as Products page */}
+        <ProductsClient initialProducts={products} isFeatured={true} />
       </section>
     </main>
   );

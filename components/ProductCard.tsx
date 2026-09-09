@@ -4,7 +4,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
 import { useCart } from '@/context/CartContext';
-import currency from 'currency.js';
 
 interface ProductCardProps {
   product: {
@@ -12,6 +11,8 @@ interface ProductCardProps {
     title: string;
     handle: string;
     description?: string;
+    price?: string;
+    image?: string | null;
     variants: {
       edges: Array<{
         node: {
@@ -39,36 +40,24 @@ interface ProductCardProps {
   currencyRate?: number;
 }
 
-export default function ProductCard({ product, currencySymbol = '$', currencyRate = 1 }: ProductCardProps) {
+export default function ProductCard({ product, currencySymbol = 'Rs', currencyRate = 1 }: ProductCardProps) {
   const [isImageLoaded, setIsImageLoaded] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const { addToCart } = useCart();
   
-  const image = product.images.edges[0]?.node;
-  const variant = product.variants.edges[0]?.node;
-  const price = variant?.price?.amount || '0.00';
-  const isAvailable = variant?.availableForSale || false;
-  const quantityAvailable = variant?.quantityAvailable || 0;
-
-  const formattedPrice = () => {
-    const num = parseFloat(price);
-    const converted = num * currencyRate;
-    return currency(converted, { symbol: currencySymbol, precision: 0 }).format();
-  };
+  // Get image from product
+  const image = product.images?.edges?.[0]?.node?.url || product.image || null;
+  const variant = product.variants?.edges?.[0]?.node;
+  
+  // Get price from product
+  const priceAmount = variant?.price?.amount || product.price || '0';
 
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     
-    if (!isAvailable || isAdding) return;
-    
-    // Check stock
-    if (quantityAvailable <= 0) {
-      setErrorMsg('Out of stock!');
-      setTimeout(() => setErrorMsg(''), 2000);
-      return;
-    }
+    if (isAdding) return;
     
     setIsAdding(true);
     
@@ -76,10 +65,9 @@ export default function ProductCard({ product, currencySymbol = '$', currencyRat
       variantId: variant?.id || product.id,
       title: product.title,
       handle: product.handle,
-      price: parseFloat(price) * currencyRate,
+      price: parseFloat(priceAmount),
       quantity: 1,
-      image: image?.url,
-      maxQuantity: quantityAvailable,
+      image: image || '',
     });
     
     if (!result.success) {
@@ -89,8 +77,6 @@ export default function ProductCard({ product, currencySymbol = '$', currencyRat
     
     setTimeout(() => setIsAdding(false), 500);
   };
-
-  const isOutOfStock = !isAvailable || quantityAvailable <= 0;
 
   return (
     <Link
@@ -106,8 +92,8 @@ export default function ProductCard({ product, currencySymbol = '$', currencyRat
               )}
               
               <Image
-                src={image.url}
-                alt={image.altText || product.title}
+                src={image}
+                alt={product.title}
                 fill
                 sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                 className={`
@@ -138,39 +124,21 @@ export default function ProductCard({ product, currencySymbol = '$', currencyRat
             </div>
           )}
         </div>
-
-        {!isOutOfStock && quantityAvailable <= 5 && quantityAvailable > 0 && (
-          <div className="absolute top-3 right-3 px-3 py-1 bg-amber-500/90 backdrop-blur-sm rounded-full">
-            <span className="text-xs font-medium tracking-wide text-white">
-              Only {quantityAvailable} left
-            </span>
-          </div>
-        )}
-
-        {isOutOfStock && (
-          <div className="absolute top-3 right-3 px-3 py-1 bg-red-500/90 backdrop-blur-sm rounded-full">
-            <span className="text-xs font-medium tracking-wide text-white">
-              Out of Stock
-            </span>
-          </div>
-        )}
       </div>
 
       <div className="mt-4 space-y-1.5">
-        <h3 className="font-medium text-zinc-800 leading-tight group-hover:text-zinc-600 transition-colors duration-300">
+        <h3 className="font-medium text-zinc-800 leading-tight group-hover:text-zinc-600 transition-colors duration-300 line-clamp-2">
           {product.title}
         </h3>
         
         <div className="flex items-center justify-between">
           <span className="text-lg font-semibold text-zinc-900 tracking-tight">
-            {formattedPrice()}
+            Rs {parseFloat(priceAmount).toLocaleString()}
           </span>
           
-          {!isOutOfStock && (
-            <span className="text-xs font-medium tracking-wide text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">
-              In Stock
-            </span>
-          )}
+          <span className="text-xs font-medium tracking-wide text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">
+            In Stock
+          </span>
         </div>
 
         {errorMsg && (
@@ -181,16 +149,14 @@ export default function ProductCard({ product, currencySymbol = '$', currencyRat
 
         <button
           onClick={handleAddToCart}
-          disabled={isOutOfStock || isAdding}
+          disabled={isAdding}
           className={`w-full mt-2 py-2 text-sm font-medium rounded-lg transition-all ${
-            !isOutOfStock && !isAdding
+            !isAdding
               ? 'bg-zinc-900 text-white hover:bg-zinc-800'
               : 'bg-zinc-200 text-zinc-400 cursor-not-allowed'
           }`}
         >
-          {isAdding ? 'Adding...' : 
-           isOutOfStock ? 'Out of Stock' : 
-           'Add to Cart'}
+          {isAdding ? 'Adding...' : 'Add to Cart'}
         </button>
       </div>
     </Link>

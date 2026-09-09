@@ -10,3 +10,18 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+/* Add this to globals.css */
+.hero-image {
+  mix-blend-mode: multiply;
+  background: white;
+}
+
+.hero-image-dark {
+  mix-blend-mode: screen;
+  background: black;
+}
+/* In globals.css */
+.hero-image-container img {
+  mix-blend-mode: multiply;
+  background: white !important;
+}
