@@ -1,85 +1,12 @@
-import { shopifyFetch } from '@/lib/shopify';
+import Link from 'next/link';
+import { fetchProducts } from '@/lib/data-source';
+import ProductCard from '@/components/ProductCard';
 import Hero from '@/components/Hero';
-import ProductsClient from '@/components/ProductsClient';
 
 export default async function Home() {
-  // Fetch products
-  const productsQuery = `
-    query {
-      products(first: 50) {
-        edges {
-          node {
-            id
-            title
-            handle
-            description
-            productType
-            variants(first: 1) {
-              edges {
-                node {
-                  price { amount }
-                  availableForSale
-                }
-              }
-            }
-            images(first: 1) {
-              edges {
-                node {
-                  url
-                  altText
-                  width
-                  height
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  `;
+  const products = await fetchProducts();
 
-  // Fetch collections for hero
-  const collectionsQuery = `
-    query {
-      collections(first: 5) {
-        edges {
-          node {
-            id
-            title
-            handle
-            description
-            image {
-              url
-              altText
-              width
-              height
-            }
-          }
-        }
-      }
-    }
-  `;
-
-  const [productsData, collectionsData] = await Promise.all([
-    shopifyFetch(productsQuery),
-    shopifyFetch(collectionsQuery),
-  ]);
-
-  const products = productsData.data?.products?.edges?.map((edge: any) => edge.node) || [];
-  const collections = collectionsData.data?.collections?.edges || [];
-
-  // Build hero slides
-  const heroSlides = collections.map(({ node: collection }: any) => ({
-    id: collection.id,
-    title: collection.title || 'Collection',
-    subtitle: 'Collection',
-    description: collection.description?.substring(0, 120) || '',
-    image: collection.image?.url || '',
-    link: `/collections/${collection.handle}`,
-    buttonText: 'Explore Collection',
-  }));
-
-  const fallbackSlides = products.slice(0, 5).map((product: any) => ({
+  const heroSlides = products.slice(0, 5).map((product: any) => ({
     id: product.id,
     title: product.title || 'New Arrival',
     subtitle: 'Product',
@@ -89,14 +16,10 @@ export default async function Home() {
     buttonText: 'View Product',
   }));
 
-  const slides = heroSlides.length > 0 && heroSlides[0]?.image ? heroSlides : fallbackSlides;
-
   return (
     <main className="bg-zinc-50">
-      {/* Hero Section */}
-      <Hero slides={slides} autoPlay={true} interval={5000} />
+      <Hero slides={heroSlides} autoPlay={true} interval={5000} />
 
-      {/* Products Section with Filters */}
       <section className="container mx-auto px-4 py-16">
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -107,10 +30,22 @@ export default async function Home() {
               Handpicked just for you
             </p>
           </div>
+          <Link
+            href="/products"
+            className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors duration-300 flex items-center gap-1"
+          >
+            View All
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </Link>
         </div>
 
-        {/* Products with Filtering */}
-        <ProductsClient initialProducts={products} />
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-8">
+          {products.slice(0, 8).map((product: any) => (
+            <ProductCard key={product.id} product={product} />
+          ))}
+        </div>
       </section>
     </main>
   );

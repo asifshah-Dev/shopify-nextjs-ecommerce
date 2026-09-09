@@ -1,48 +1,26 @@
-import { shopifyFetch } from '@/lib/shopify';
+import { fetchProducts } from '@/lib/data-source';
 import ProductsClient from '@/components/ProductsClient';
 
+export const metadata = {
+  title: 'All Products',
+  description: 'Browse our complete collection of premium products',
+};
+
 export default async function ProductsPage() {
-  const query = `
-    query {
-      products(first: 50) {
-        edges {
-          node {
-            id
-            title
-            handle
-            description
-            productType
-            variants(first: 1) {
-              edges {
-                node {
-                  price { amount }
-                  availableForSale
-                }
-              }
-            }
-            images(first: 1) {
-              edges {
-                node {
-                  url
-                  altText
-                  width
-                  height
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  `;
-  
-  const data = await shopifyFetch(query) as { data: any };
-  const products = data.data?.products?.edges?.map((edge: any) => edge.node) || [];
+  const products = await fetchProducts();
 
   return (
     <main className="bg-zinc-50 min-h-screen">
       <div className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold mb-8">All Products</h1>
+        <div className="mb-8">
+          <h1 className="text-3xl md:text-4xl font-bold text-zinc-900 tracking-tight">
+            All Products
+          </h1>
+          <p className="mt-2 text-zinc-500">
+            {products.length} products available
+          </p>
+        </div>
+
         <ProductsClient initialProducts={products} />
       </div>
     </main>
