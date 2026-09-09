@@ -36,7 +36,7 @@ export default async function Home() {
             </p>
           </div>
           <Link
-            href="/products"
+            href="/product"
             className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors duration-300 flex items-center gap-1"
           >
             View All

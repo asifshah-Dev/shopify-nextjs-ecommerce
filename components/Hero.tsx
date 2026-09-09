@@ -54,40 +54,38 @@ export default function Hero({ slides = [], autoPlay = true, interval = 5000 }: 
 
   return (
     <div className="relative w-full bg-white overflow-hidden">
-      <div className="relative h-[400px] md:h-[500px] lg:h-[550px]">
+      <div className="relative min-h-[380px] md:min-h-[450px] lg:min-h-[500px] flex items-center">
         <AnimatePresence mode="wait">
           <motion.div
             key={currentIndex}
-            initial={{ opacity: 0, scale: 1.02 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.98 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
-            className="absolute inset-0 flex items-center justify-center"
+            className="absolute inset-0 flex items-center"
           >
             {currentSlide.image ? (
-              <>
-                <div className="relative w-full h-full">
-                  <Image
-                    src={currentSlide.image}
-                    alt={currentSlide.title}
-                    fill
-                    className="object-contain"
-                    priority
-                    sizes="100vw"
-                    unoptimized={currentSlide.image.includes('?v=')}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-black/20 to-transparent pointer-events-none" />
-                </div>
-              </>
+              <div className="relative w-full h-full flex items-center">
+                <Image
+                  src={currentSlide.image}
+                  alt={currentSlide.title}
+                  fill
+                  className="object-contain object-right"
+                  priority
+                  sizes="(max-width: 768px) 100vw, 55vw"
+                  unoptimized={currentSlide.image.includes('?v=')}
+                />
+                <div className="absolute inset-0 bg-gradient-to-r from-white via-white/70 to-transparent" />
+              </div>
             ) : (
-              <div className="w-full h-full bg-zinc-100" />
+              <div className="w-full h-full " />
             )}
           </motion.div>
         </AnimatePresence>
 
-        {/* Content */}
-        <div className="absolute inset-0 flex items-center">
-          <div className="container mx-auto px-4 md:px-6">
+        {/* Content - Left Side */}
+        <div className="relative z-10 container mx-auto px-4">
+          <div className="max-w-sm md:max-w-md">
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentIndex}
@@ -95,20 +93,19 @@ export default function Hero({ slides = [], autoPlay = true, interval = 5000 }: 
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.5, delay: 0.2 }}
-                className="max-w-lg text-white"
               >
                 {currentSlide.subtitle && (
-                  <span className="inline-block px-3 py-1 mb-2 text-xs font-medium uppercase tracking-wider bg-white/20 backdrop-blur-sm rounded-full">
+                  <span className="inline-block px-4 py-1.5 mb-3 text-xs font-semibold uppercase tracking-wider bg-teal-600 text-white">
                     {currentSlide.subtitle}
                   </span>
                 )}
                 
-                <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold leading-tight">
+                <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold leading-tight text-gray-900">
                   {currentSlide.title}
                 </h1>
                 
                 {currentSlide.description && (
-                  <p className="mt-2 text-sm md:text-base text-white/90">
+                  <p className="mt-2 text-sm md:text-base text-gray-700">
                     {currentSlide.description}
                   </p>
                 )}
@@ -116,9 +113,9 @@ export default function Hero({ slides = [], autoPlay = true, interval = 5000 }: 
                 {currentSlide.link && (
                   <Link
                     href={currentSlide.link}
-                    className="inline-block mt-4 px-6 py-2.5 bg-white text-zinc-900 font-medium rounded-lg hover:bg-zinc-100 transition text-sm md:text-base shadow-lg"
+                    className="inline-block mt-5 px-6 py-2.5 bg-white text-black font-medium border border-gray-300 hover:bg-gray-50 transition text-sm md:text-base"
                   >
-                    {currentSlide.buttonText || 'Shop Now'}
+                    {currentSlide.buttonText || 'View Product'}
                   </Link>
                 )}
               </motion.div>
@@ -131,13 +128,13 @@ export default function Hero({ slides = [], autoPlay = true, interval = 5000 }: 
           <>
             <button
               onClick={prevSlide}
-              className="absolute left-3 top-1/2 -translate-y-1/2 z-10 p-2 bg-black/30 backdrop-blur-sm text-white rounded-full hover:bg-black/50 transition"
+              className="absolute left-3 top-1/2 -translate-y-1/2 z-20 p-2 bg-white/80 backdrop-blur-sm text-teal-700 rounded-full hover:bg-white transition shadow-lg"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
             <button
               onClick={nextSlide}
-              className="absolute right-3 top-1/2 -translate-y-1/2 z-10 p-2 bg-black/30 backdrop-blur-sm text-white rounded-full hover:bg-black/50 transition"
+              className="absolute right-3 top-1/2 -translate-y-1/2 z-20 p-2 bg-white/80 backdrop-blur-sm text-teal-700 rounded-full hover:bg-white transition shadow-lg"
             >
               <ChevronRight className="w-5 h-5" />
             </button>
@@ -146,13 +143,13 @@ export default function Hero({ slides = [], autoPlay = true, interval = 5000 }: 
 
         {/* Dots */}
         {slides.length > 1 && (
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex gap-1.5">
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-2">
             {slides.map((_, index) => (
               <button
                 key={index}
                 onClick={() => goToSlide(index)}
-                className={`w-2 h-2 rounded-full transition ${
-                  index === currentIndex ? 'bg-white' : 'bg-white/40'
+                className={`transition-all duration-300 rounded-full ${
+                  index === currentIndex ? 'w-8 h-2 bg-teal-600' : 'w-2 h-2 bg-gray-300 hover:bg-gray-400'
                 }`}
               />
             ))}

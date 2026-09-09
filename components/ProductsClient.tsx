@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { ChevronDown, Check, X, Filter, SlidersHorizontal, LayoutGrid, Grid3x3, List } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ProductCard from './ProductCard';
@@ -50,11 +50,9 @@ interface ProductsClientProps {
 }
 
 export default function ProductsClient({ initialProducts, isFeatured = false }: ProductsClientProps) {
-  // PKR is the only currency
   const currencySymbol = 'Rs';
   const currencyRate = 1;
 
-  // Find max price
   const maxPrice = useMemo(() => {
     let max = 0;
     initialProducts.forEach(p => {
@@ -76,12 +74,8 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
   const [sortBy, setSortBy] = useState('featured');
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [visibleProducts, setVisibleProducts] = useState(12);
-  const [loading, setLoading] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
-  const loadMoreRef = useRef<HTMLDivElement>(null);
 
-  // JS-driven sticky sidebar
   const columnsRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const [sidebarStyle, setSidebarStyle] = useState<React.CSSProperties>({ position: 'static' });
@@ -118,7 +112,6 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
     };
   }, [showFilters]);
 
-  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (sortRef.current && !sortRef.current.contains(event.target as Node)) {
@@ -129,7 +122,6 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Extract categories from products
   const categories = useMemo(() => {
     const cats = new Set<string>();
     initialProducts.forEach(p => {
@@ -139,11 +131,9 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
     return Array.from(cats);
   }, [initialProducts]);
 
-  // Apply filters and sorting
   const filteredProducts = useMemo(() => {
     let filtered = [...initialProducts];
 
-    // Category filter
     if (filters.categories.length > 0) {
       filtered = filtered.filter(p => {
         const type = p.productType || 'Uncategorized';
@@ -151,18 +141,15 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
       });
     }
 
-    // Price filter - in PKR
     filtered = filtered.filter(p => {
       const price = parseFloat(p.variants?.edges?.[0]?.node?.price?.amount || p.price || '0');
       return price >= filters.priceRange.min && price <= filters.priceRange.max;
     });
 
-    // Stock filter
     if (filters.inStockOnly) {
       filtered = filtered.filter(p => p.variants?.edges?.[0]?.node?.availableForSale !== false);
     }
 
-    // Sort
     switch (sortBy) {
       case 'price-asc':
         filtered.sort((a, b) => {
@@ -185,36 +172,6 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
     return filtered;
   }, [initialProducts, filters, sortBy]);
 
-  // Lazy loading - Intersection Observer (moved AFTER filteredProducts is defined)
-  useEffect(() => {
-    if (filteredProducts.length <= visibleProducts) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && !loading) {
-          setLoading(true);
-          setTimeout(() => {
-            setVisibleProducts(prev => Math.min(prev + 8, filteredProducts.length));
-            setLoading(false);
-          }, 500);
-        }
-      },
-      { threshold: 0.1 }
-    );
-
-    if (loadMoreRef.current) {
-      observer.observe(loadMoreRef.current);
-    }
-
-    return () => observer.disconnect();
-  }, [filteredProducts.length, visibleProducts, loading]);
-
-  // Reset visible products when filters change
-  useEffect(() => {
-    setVisibleProducts(12);
-  }, [filters, sortBy]);
-
-  // Toggle category
   const toggleCategory = (category: string) => {
     setFilters(prev => ({
       ...prev,
@@ -224,7 +181,6 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
     }));
   };
 
-  // Apply price filter
   const applyPriceFilter = () => {
     setFilters(prev => ({
       ...prev,
@@ -261,9 +217,35 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
     return option ? option.label : 'Sort';
   };
 
-  // Get display products (with lazy loading)
-  const displayProducts = filteredProducts.slice(0, visibleProducts);
-  const hasMore = filteredProducts.length > visibleProducts;
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.06,
+        delayChildren: 0.1,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: {
+      opacity: 0,
+      y: 30,
+      scale: 0.95,
+    },
+    visible: {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      transition: {
+        type: 'spring',
+        damping: 20,
+        stiffness: 300,
+        duration: 0.4,
+      },
+    },
+  };
 
   return (
     <div className="relative">
@@ -284,20 +266,19 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
                 style={sidebarStyle}
                 className="w-64 max-h-[calc(100vh-120px)] overflow-y-auto pr-4 space-y-4 lg:space-y-6 no-scrollbar"
               >
-                <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-zinc-900">Filters</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold text-teal-700">Filters</h3>
                   {activeFilterCount > 0 && (
-                    <button onClick={clearFilters} className="text-sm text-zinc-400 hover:text-zinc-700">
+                    <button onClick={clearFilters} className="text-sm text-coral-500 hover:text-coral-600">
                       Clear all
                     </button>
                   )}
                 </div>
 
                 {activeFilterCount > 0 && (
-                  <div className="text-sm text-zinc-500">Active filters: {activeFilterCount}</div>
+                  <div className="text-sm text-teal-500 mb-4">Active filters: {activeFilterCount}</div>
                 )}
 
-                {/* Categories */}
                 {categories.length > 0 && (
                   <FilterSection title="Categories">
                     <div className="space-y-1.5 lg:space-y-2 max-h-48 overflow-y-auto no-scrollbar">
@@ -305,14 +286,14 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
                         const count = initialProducts.filter(p => (p.productType || 'Uncategorized') === cat).length;
                         return (
                           <label key={cat} className="flex items-center justify-between cursor-pointer py-1 group">
-                            <span className="text-sm text-zinc-700 group-hover:text-zinc-900">{cat}</span>
+                            <span className="text-sm text-gray-700 group-hover:text-teal-700">{cat}</span>
                             <div className="flex items-center gap-2">
-                              <span className="text-xs text-zinc-400">{count}</span>
+                              <span className="text-xs text-gray-400">{count}</span>
                               <input
                                 type="checkbox"
                                 checked={filters.categories.includes(cat)}
                                 onChange={() => toggleCategory(cat)}
-                                className="w-4 h-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
+                                className="w-4 h-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
                               />
                             </div>
                           </label>
@@ -322,12 +303,11 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
                   </FilterSection>
                 )}
 
-                {/* Price Range - in PKR */}
-                <FilterSection title={`Price Range (PKR)`}>
+                <FilterSection title="Price (PKR)">
                   <div className="space-y-3">
                     <div className="flex flex-col sm:flex-row gap-3">
                       <div className="flex-1">
-                        <label className="text-xs text-zinc-500">Min</label>
+                        <label className="text-xs text-gray-600">Min</label>
                         <input
                           type="number"
                           value={priceMin}
@@ -335,12 +315,12 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
                             setPriceMin(Number(e.target.value));
                             applyPriceFilter();
                           }}
-                          className="w-full mt-1 px-3 py-2 border border-zinc-200 rounded-lg text-sm outline-none focus:border-zinc-900"
-                          placeholder="Rs 0"
+                          className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:border-teal-500 transition-colors text-gray-800"
+                          placeholder="0"
                         />
                       </div>
                       <div className="flex-1">
-                        <label className="text-xs text-zinc-500">Max</label>
+                        <label className="text-xs text-gray-600">Max</label>
                         <input
                           type="number"
                           value={priceMax}
@@ -348,26 +328,25 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
                             setPriceMax(Number(e.target.value));
                             applyPriceFilter();
                           }}
-                          className="w-full mt-1 px-3 py-2 border border-zinc-200 rounded-lg text-sm outline-none focus:border-zinc-900"
-                          placeholder={`Rs ${maxPrice}`}
+                          className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:border-teal-500 transition-colors text-gray-800"
+                          placeholder={maxPrice.toString()}
                         />
                       </div>
                     </div>
                   </div>
                 </FilterSection>
 
-                {/* In Stock Only */}
-                <div className="flex items-center justify-between py-3 border-t border-zinc-200">
-                  <span className="text-sm font-medium">In Stock Only</span>
+                <div className="flex items-center justify-between py-3 border-t border-gray-200">
+                  <span className="text-sm font-medium text-gray-800">In Stock Only</span>
                   <button
                     onClick={() => setFilters(prev => ({ ...prev, inStockOnly: !prev.inStockOnly }))}
-                    className={`relative w-11 h-6 rounded-full transition-colors ${filters.inStockOnly ? 'bg-zinc-900' : 'bg-zinc-300'}`}
+                    className={`relative w-11 h-6 rounded-full transition-colors ${filters.inStockOnly ? 'bg-teal-600' : 'bg-gray-300'}`}
                   >
                     <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${filters.inStockOnly ? 'translate-x-5' : 'translate-x-0'}`} />
                   </button>
                 </div>
 
-                <div className="pt-4 text-sm text-zinc-500 border-t border-zinc-200">
+                <div className="pt-4 text-sm text-gray-500 border-t border-gray-200">
                   {filteredProducts.length} products
                 </div>
               </div>
@@ -375,35 +354,34 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
           )}
         </AnimatePresence>
 
-        {/* Product Grid */}
+        {/* Product Grid - NO BACKGROUND COLOR */}
         <div className="flex-1 min-w-0">
           {/* Toolbar */}
-          <div className="flex flex-wrap items-center justify-between gap-2 md:gap-3 mb-4 md:mb-6">
-            <div className="flex items-center gap-1 md:gap-2 flex-wrap">
+          <div className="flex flex-wrap items-center justify-between gap-2 md:gap-3 mb-6">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className="flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1.5 md:py-2 border border-zinc-200 rounded-lg hover:bg-zinc-50 transition-colors text-xs md:text-sm font-medium text-zinc-700"
+                className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-teal-50 transition-colors text-sm font-medium text-gray-700"
               >
-                <LayoutGrid className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                <LayoutGrid className="w-4 h-4 text-teal-500" />
                 <span>{showFilters ? 'Hide Filters' : 'Show Filters'}</span>
               </button>
             </div>
 
-            <div className="flex items-center gap-2 md:gap-3 flex-wrap">
-              {/* Sort Dropdown */}
+            <div className="flex items-center gap-3">
               <div className="relative" ref={sortRef}>
                 <button
                   onClick={() => setIsSortOpen(!isSortOpen)}
-                  className="flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1.5 md:py-2 text-xs md:text-sm font-medium text-zinc-700 hover:bg-zinc-50 rounded-lg transition-colors"
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-teal-50 rounded-lg transition-colors"
                 >
-                  <SlidersHorizontal className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                  <SlidersHorizontal className="w-4 h-4 text-teal-500" />
                   <span className="hidden xs:inline">Sort: {getSortLabel()}</span>
                   <span className="xs:hidden">{getSortLabel()}</span>
-                  <ChevronDown className={`w-3.5 h-3.5 md:w-4 md:h-4 transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
+                  <ChevronDown className={`w-4 h-4 transition-transform ${isSortOpen ? 'rotate-180' : ''} text-gray-400`} />
                 </button>
 
                 {isSortOpen && (
-                  <div className="absolute right-0 mt-1 w-48 md:w-56 bg-white border border-zinc-200 rounded-xl shadow-lg py-1 z-10">
+                  <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-lg py-1 z-10">
                     {sortOptions.map((option) => (
                       <button
                         key={option.value}
@@ -411,11 +389,11 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
                           setSortBy(option.value);
                           setIsSortOpen(false);
                         }}
-                        className="flex items-center justify-between w-full px-3 md:px-4 py-2 md:py-2.5 text-xs md:text-sm text-zinc-700 hover:bg-zinc-50 transition-colors"
+                        className="flex items-center justify-between w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-teal-50 transition-colors"
                       >
                         {option.label}
                         {sortBy === option.value && (
-                          <Check className="w-3.5 h-3.5 md:w-4 md:h-4 text-zinc-900" />
+                          <Check className="w-4 h-4 text-teal-600" />
                         )}
                       </button>
                     ))}
@@ -423,35 +401,35 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
                 )}
               </div>
 
-              <span className="text-sm text-zinc-500 hidden sm:block">
+              <span className="text-sm text-gray-500 hidden sm:block">
                 {filteredProducts.length} products
               </span>
             </div>
           </div>
 
-          {/* Product grid with lazy loading */}
-          <div className={`
-            grid gap-3 md:gap-4 lg:gap-6
-            ${viewMode === 'grid' 
-              ? 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4' 
-              : 'grid-cols-1'
-            }
-          `}>
-            {displayProducts.length === 0 ? (
-              <div className="col-span-full text-center py-12 md:py-20 bg-white rounded-xl">
-                <p className="text-zinc-500">No products found</p>
-                <button onClick={clearFilters} className="mt-4 text-zinc-900 underline text-sm md:text-base">
+          {/* Product grid - NO BACKGROUND */}
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className={`
+              grid gap-4 md:gap-6
+              ${viewMode === 'grid' 
+                ? 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4' 
+                : 'grid-cols-1'
+              }
+            `}
+          >
+            {filteredProducts.length === 0 ? (
+              <div className="col-span-full text-center py-16 bg-white rounded-xl">
+                <p className="text-gray-500">No products found</p>
+                <button onClick={clearFilters} className="mt-2 text-coral-500 hover:text-coral-600 underline text-sm">
                   Clear filters
                 </button>
               </div>
             ) : (
-              displayProducts.map((p, index) => (
-                <motion.div
-                  key={p.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: Math.min(index * 0.05, 0.5), duration: 0.3 }}
-                >
+              filteredProducts.map((p) => (
+                <motion.div key={p.id} variants={itemVariants}>
                   <ProductCard 
                     product={p} 
                     currencySymbol={currencySymbol}
@@ -460,89 +438,68 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
                 </motion.div>
               ))
             )}
-          </div>
-
-          {/* Load more trigger */}
-          {hasMore && (
-            <div ref={loadMoreRef} className="flex justify-center py-8">
-              {loading ? (
-                <div className="flex items-center gap-2 text-zinc-500">
-                  <div className="w-5 h-5 border-2 border-zinc-300 border-t-zinc-900 rounded-full animate-spin" />
-                  <span>Loading more...</span>
-                </div>
-              ) : (
-                <span className="text-sm text-zinc-400">
-                  Showing {displayProducts.length} of {filteredProducts.length} products
-                </span>
-              )}
-            </div>
-          )}
+          </motion.div>
         </div>
       </div>
 
       {/* Mobile View */}
       <div className="lg:hidden">
         {/* Toolbar */}
-        <div className="flex flex-wrap items-center justify-between gap-2 md:gap-3 mb-4 md:mb-6">
-          <div className="flex items-center gap-1 md:gap-2 flex-wrap">
-            {/* View Toggle Buttons */}
-            <div className="flex items-center border border-zinc-200 rounded-lg overflow-hidden bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden bg-white">
               <button
                 onClick={() => setViewMode('grid')}
-                className={`p-1.5 transition-all duration-300 ease-in-out ${
+                className={`p-2 transition-colors ${
                   viewMode === 'grid' 
-                    ? 'bg-zinc-900 text-white scale-105' 
-                    : 'text-zinc-400 hover:text-zinc-700'
+                    ? 'bg-teal-600 text-white' 
+                    : 'text-gray-400 hover:text-gray-700'
                 }`}
               >
-                <Grid3x3 className="w-3.5 h-3.5" />
+                <Grid3x3 className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setViewMode('list')}
-                className={`p-1.5 transition-all duration-300 ease-in-out ${
+                className={`p-2 transition-colors ${
                   viewMode === 'list' 
-                    ? 'bg-zinc-900 text-white scale-105' 
-                    : 'text-zinc-400 hover:text-zinc-700'
+                    ? 'bg-teal-600 text-white' 
+                    : 'text-gray-400 hover:text-gray-700'
                 }`}
               >
-                <List className="w-3.5 h-3.5" />
+                <List className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Mobile Filter Button */}
             <button
               onClick={() => setIsMobileFilterOpen(true)}
-              className="flex items-center gap-1 md:gap-2 px-2 md:px-4 py-1.5 md:py-2 border border-zinc-200 rounded-lg hover:bg-zinc-50 transition-colors"
+              className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-teal-50 transition-colors"
             >
-              <Filter className="w-3.5 h-3.5 md:w-4 md:h-4" />
-              <span className="text-xs md:text-sm font-medium">Filters</span>
+              <Filter className="w-4 h-4 text-teal-500" />
+              <span className="text-sm font-medium text-gray-700">Filters</span>
               {activeFilterCount > 0 && (
-                <span className="bg-zinc-900 text-white text-[10px] md:text-xs rounded-full w-4 h-4 md:w-5 md:h-5 flex items-center justify-center">
+                <span className="bg-coral-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
                   {activeFilterCount}
                 </span>
               )}
             </button>
           </div>
 
-          <div className="flex items-center gap-2 md:gap-3">
-            <span className="text-sm text-zinc-500">
-              {filteredProducts.length} products
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-500">
+              {filteredProducts.length}
             </span>
 
-            {/* Sort Dropdown */}
             <div className="relative" ref={sortRef}>
               <button
                 onClick={() => setIsSortOpen(!isSortOpen)}
-                className="flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1.5 md:py-2 text-xs md:text-sm font-medium text-zinc-700 hover:bg-zinc-50 rounded-lg transition-colors"
+                className="flex items-center gap-1 px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-teal-50 rounded-lg transition-colors"
               >
-                <SlidersHorizontal className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                <span className="hidden xs:inline">Sort: {getSortLabel()}</span>
-                <span className="xs:hidden">{getSortLabel()}</span>
-                <ChevronDown className={`w-3.5 h-3.5 md:w-4 md:h-4 transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
+                <SlidersHorizontal className="w-4 h-4 text-teal-500" />
+                <ChevronDown className={`w-4 h-4 transition-transform ${isSortOpen ? 'rotate-180' : ''} text-gray-400`} />
               </button>
 
               {isSortOpen && (
-                <div className="absolute right-0 mt-1 w-48 md:w-56 bg-white border border-zinc-200 rounded-xl shadow-lg py-1 z-10">
+                <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-lg py-1 z-10">
                   {sortOptions.map((option) => (
                     <button
                       key={option.value}
@@ -550,11 +507,11 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
                         setSortBy(option.value);
                         setIsSortOpen(false);
                       }}
-                      className="flex items-center justify-between w-full px-3 md:px-4 py-2 md:py-2.5 text-xs md:text-sm text-zinc-700 hover:bg-zinc-50 transition-colors"
+                      className="flex items-center justify-between w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-teal-50 transition-colors"
                     >
                       {option.label}
                       {sortBy === option.value && (
-                        <Check className="w-3.5 h-3.5 md:w-4 md:h-4 text-zinc-900" />
+                        <Check className="w-4 h-4 text-teal-600" />
                       )}
                     </button>
                   ))}
@@ -564,29 +521,29 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
           </div>
         </div>
 
-        {/* Product grid - Mobile with lazy loading */}
-        <div className={`
-          grid gap-3 md:gap-4
-          ${viewMode === 'grid' 
-            ? 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3' 
-            : 'grid-cols-1'
-          }
-        `}>
-          {displayProducts.length === 0 ? (
-            <div className="col-span-full text-center py-12 bg-white rounded-xl">
-              <p className="text-zinc-500">No products found</p>
-              <button onClick={clearFilters} className="mt-4 text-zinc-900 underline text-sm">
+        {/* Product grid - Mobile - NO BACKGROUND */}
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+          className={`
+            grid gap-4
+            ${viewMode === 'grid' 
+              ? 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3' 
+              : 'grid-cols-1'
+            }
+          `}
+        >
+          {filteredProducts.length === 0 ? (
+            <div className="col-span-full text-center py-16 bg-white rounded-xl">
+              <p className="text-gray-500">No products found</p>
+              <button onClick={clearFilters} className="mt-2 text-coral-500 hover:text-coral-600 underline text-sm">
                 Clear filters
               </button>
             </div>
           ) : (
-            displayProducts.map((p, index) => (
-              <motion.div
-                key={p.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: Math.min(index * 0.05, 0.5), duration: 0.3 }}
-              >
+            filteredProducts.map((p) => (
+              <motion.div key={p.id} variants={itemVariants}>
                 <ProductCard 
                   product={p} 
                   currencySymbol={currencySymbol}
@@ -595,23 +552,7 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
               </motion.div>
             ))
           )}
-        </div>
-
-        {/* Load more trigger - Mobile */}
-        {hasMore && (
-          <div ref={loadMoreRef} className="flex justify-center py-8">
-            {loading ? (
-              <div className="flex items-center gap-2 text-zinc-500">
-                <div className="w-5 h-5 border-2 border-zinc-300 border-t-zinc-900 rounded-full animate-spin" />
-                <span>Loading more...</span>
-              </div>
-            ) : (
-              <span className="text-sm text-zinc-400">
-                Showing {displayProducts.length} of {filteredProducts.length} products
-              </span>
-            )}
-          </div>
-        )}
+        </motion.div>
       </div>
 
       {/* Mobile filter drawer */}
@@ -640,52 +581,50 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
               className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl max-h-[85vh] overflow-y-auto"
             >
               <div className="flex justify-center pt-2 pb-1">
-                <div className="w-12 h-1 bg-zinc-300 rounded-full" />
+                <div className="w-12 h-1 bg-gray-300 rounded-full" />
               </div>
 
               <div className="px-4 pb-4">
-                <div className="flex items-center justify-between border-b border-zinc-200 pb-4">
-                  <h3 className="font-bold text-lg">Filters</h3>
+                <div className="flex items-center justify-between border-b border-gray-200 pb-4">
+                  <h3 className="font-bold text-lg text-teal-700">Filters</h3>
                   <div className="flex items-center gap-2">
                     {activeFilterCount > 0 && (
                       <button 
                         onClick={clearFilters} 
-                        className="text-sm text-zinc-400 hover:text-zinc-700"
+                        className="text-sm text-coral-500 hover:text-coral-600"
                       >
                         Clear all
                       </button>
                     )}
                     <button 
                       onClick={() => setIsMobileFilterOpen(false)}
-                      className="p-2 hover:bg-zinc-100 rounded-lg transition-colors"
+                      className="p-2 hover:bg-teal-50 rounded-lg transition-colors"
                     >
-                      <X className="w-5 h-5 text-zinc-700" />
+                      <X className="w-5 h-5 text-teal-700" />
                     </button>
                   </div>
                 </div>
 
                 <div className="py-4 space-y-4 max-h-[50vh] overflow-y-auto">
-                  {/* Categories */}
                   {categories.length > 0 && (
                     <div>
-                      <h4 className="font-medium mb-2">Categories</h4>
+                      <h4 className="font-medium mb-2 text-teal-700">Categories</h4>
                       {categories.map(cat => (
-                        <label key={cat} className="flex items-center justify-between py-2 border-b border-zinc-100">
-                          <span className="text-sm">{cat}</span>
+                        <label key={cat} className="flex items-center justify-between py-2 border-b border-gray-100">
+                          <span className="text-sm text-gray-700">{cat}</span>
                           <input
                             type="checkbox"
                             checked={filters.categories.includes(cat)}
                             onChange={() => toggleCategory(cat)}
-                            className="w-4 h-4 rounded border-zinc-300 text-zinc-900"
+                            className="w-4 h-4 rounded border-gray-300 text-teal-600"
                           />
                         </label>
                       ))}
                     </div>
                   )}
 
-                  {/* Price */}
                   <div>
-                    <h4 className="font-medium mb-2">Price Range (PKR)</h4>
+                    <h4 className="font-medium mb-2 text-teal-700">Price (PKR)</h4>
                     <div className="flex gap-3">
                       <input
                         type="number"
@@ -694,7 +633,7 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
                           setPriceMin(Number(e.target.value));
                           applyPriceFilter();
                         }}
-                        className="flex-1 px-3 py-2 border rounded-lg text-sm outline-none focus:border-zinc-900"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:border-teal-500 text-gray-800"
                         placeholder="Min"
                       />
                       <input
@@ -704,26 +643,24 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
                           setPriceMax(Number(e.target.value));
                           applyPriceFilter();
                         }}
-                        className="flex-1 px-3 py-2 border rounded-lg text-sm outline-none focus:border-zinc-900"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:border-teal-500 text-gray-800"
                         placeholder="Max"
                       />
                     </div>
                   </div>
 
-                  {/* In Stock */}
-                  <div className="flex items-center justify-between py-3 border-t border-zinc-200">
-                    <span className="text-sm font-medium">In Stock Only</span>
+                  <div className="flex items-center justify-between py-3 border-t border-gray-200">
+                    <span className="text-sm font-medium text-gray-800">In Stock Only</span>
                     <button
                       onClick={() => setFilters(prev => ({ ...prev, inStockOnly: !prev.inStockOnly }))}
-                      className={`relative w-11 h-6 rounded-full transition-colors ${filters.inStockOnly ? 'bg-zinc-900' : 'bg-zinc-300'}`}
+                      className={`relative w-11 h-6 rounded-full transition-colors ${filters.inStockOnly ? 'bg-teal-600' : 'bg-gray-300'}`}
                     >
                       <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${filters.inStockOnly ? 'translate-x-5' : 'translate-x-0'}`} />
                     </button>
                   </div>
 
-                  {/* Sort */}
                   <div>
-                    <h4 className="font-medium mb-2">Sort By</h4>
+                    <h4 className="font-medium mb-2 text-teal-700">Sort By</h4>
                     <div className="space-y-2">
                       {sortOptions.map((option) => (
                         <button
@@ -733,8 +670,8 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
                           }}
                           className={`flex items-center justify-between w-full px-3 py-2 text-sm rounded-lg transition-colors ${
                             sortBy === option.value
-                              ? 'bg-zinc-900 text-white'
-                              : 'text-zinc-700 hover:bg-zinc-50'
+                              ? 'bg-teal-600 text-white'
+                              : 'text-gray-700 hover:bg-teal-50'
                           }`}
                         >
                           {option.label}
@@ -749,7 +686,7 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
 
                 <button 
                   onClick={() => setIsMobileFilterOpen(false)} 
-                  className="w-full py-3 bg-zinc-900 text-white rounded-xl font-medium hover:bg-zinc-800 transition-colors"
+                  className="w-full py-3 bg-teal-600 text-white rounded-xl font-medium hover:bg-teal-700 transition-colors"
                 >
                   Apply Filters ({filteredProducts.length} products)
                 </button>
@@ -765,12 +702,12 @@ export default function ProductsClient({ initialProducts, isFeatured = false }: 
 function FilterSection({ title, children }: { title: string; children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(true);
   return (
-    <div className="border-b border-zinc-200 pb-4">
-      <button onClick={() => setIsOpen(!isOpen)} className="flex items-center justify-between w-full py-2">
-        <span className="font-medium text-sm">{title}</span>
-        <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+    <div className="border-b border-gray-200 pb-3 mb-3">
+      <button onClick={() => setIsOpen(!isOpen)} className="flex items-center justify-between w-full py-1">
+        <span className="text-sm font-medium text-teal-700">{title}</span>
+        <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''} text-gray-400`} />
       </button>
-      {isOpen && <div className="mt-3">{children}</div>}
+      {isOpen && <div className="mt-2">{children}</div>}
     </div>
   );
 }

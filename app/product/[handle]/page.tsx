@@ -1,7 +1,12 @@
+'use client';
+
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { useState, useEffect, use } from 'react';
+import { ShoppingBag, Plus, Minus } from 'lucide-react';
 import { fetchProductByHandle } from '@/lib/data-source';
+import { useCart } from '@/context/CartContext';
 
 interface PageProps {
   params: {
@@ -9,112 +14,211 @@ interface PageProps {
   };
 }
 
-export default async function ProductPage({ params }: PageProps) {
-  const product = await fetchProductByHandle(params.handle);
+export default function ProductPage({ params }: PageProps) {
+  const { handle } = use(params);
+  const [product, setProduct] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedImage, setSelectedImage] = useState(0);
+  const [quantity, setQuantity] = useState(1);
+  const [isAdding, setIsAdding] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const { addToCart } = useCart();
+
+  useEffect(() => {
+    const loadProduct = async () => {
+      try {
+        const data = await fetchProductByHandle(handle);
+        setProduct(data);
+      } catch (error) {
+        console.error('Error loading product:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadProduct();
+  }, [handle]);
+
+  const handleAddToCart = () => {
+    if (isAdding) return;
+    
+    setIsAdding(true);
+    
+    const firstVariant = product?.variants?.edges?.[0]?.node;
+    const price = firstVariant?.price?.amount || product?.price || '0';
+    const image = product?.images?.edges?.[0]?.node?.url || product?.image || '';
+    
+    const result = addToCart({
+      variantId: firstVariant?.id || product?.id || '',
+      title: product?.title || '',
+      handle: product?.handle || '',
+      price: parseFloat(price),
+      quantity: quantity,
+      image: image,
+    });
+    
+    if (!result.success) {
+      setErrorMsg(result.message || 'Cannot add to cart');
+      setTimeout(() => setErrorMsg(''), 3000);
+    } else {
+      setErrorMsg('✅ Added to cart!');
+      setTimeout(() => setErrorMsg(''), 2000);
+    }
+    
+    setTimeout(() => setIsAdding(false), 500);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-gray-500">Loading...</div>
+      </div>
+    );
+  }
 
   if (!product) {
     notFound();
   }
 
   const firstVariant = product.variants?.edges?.[0]?.node;
-  const price = firstVariant?.price?.amount || '0.00';
-  const inStock = firstVariant?.availableForSale || false;
-  const images = product.images?.edges?.map((edge: any) => edge.node) || [];
+  const price = firstVariant?.price?.amount || product.price || '0.00';
+  const inStock = firstVariant?.availableForSale !== undefined ? firstVariant.availableForSale : true;
+  
+  const allImages = product.images?.edges?.map((edge: any) => edge.node.url) || [];
+  const mainImage = allImages[selectedImage] || product.image || '';
+
+  // Calculate total price based on quantity
+  const unitPrice = parseFloat(price);
+  const totalPrice = unitPrice * quantity;
 
   return (
-    <main className="bg-zinc-50 min-h-screen">
+    <div className="min-h-screen">
       <div className="container mx-auto px-4 py-8">
-        <nav className="text-sm text-zinc-500 mb-6">
-          <Link href="/" className="hover:text-zinc-900 transition-colors">Home</Link>
+        <nav className="text-sm text-gray-500 mb-6">
+          <Link href="/" className="hover:text-teal-600 transition-colors">Home</Link>
           <span className="mx-2">/</span>
-          <Link href="/products" className="hover:text-zinc-900 transition-colors">Products</Link>
+          <Link href="/product" className="hover:text-teal-600 transition-colors">Products</Link>
           <span className="mx-2">/</span>
-          <span className="text-zinc-900">{product.title}</span>
+          <span className="text-gray-800 font-medium line-clamp-1">{product.title}</span>
         </nav>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 bg-white rounded-2xl shadow-xl p-6 md:p-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12 p-6 md:p-8 border border-gray-100 rounded-2xl">
+          {/* Product Images */}
           <div>
-            <div className="relative h-96 bg-zinc-100 rounded-xl overflow-hidden">
-              {images[0] ? (
+            <div className="relative h-96 rounded-xl overflow-hidden">
+              {mainImage ? (
                 <Image
-                  src={images[0].url}
-                  alt={images[0].altText || product.title}
+                  src={mainImage}
+                  alt={product.title}
                   fill
-                  className="object-cover"
+                  className="object-contain"
                   priority
+                  sizes="(max-width: 768px) 100vw, 50vw"
                 />
               ) : (
-                <div className="flex items-center justify-center h-full text-zinc-400">
+                <div className="flex items-center justify-center h-full text-gray-400">
                   No image available
                 </div>
               )}
             </div>
             
-            {images.length > 1 && (
+            {allImages.length > 1 && (
               <div className="flex gap-2 mt-4 overflow-x-auto pb-2">
-                {images.map((image: any, index: number) => (
-                  <div 
-                    key={index} 
-                    className={`relative w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden cursor-pointer border-2 ${
-                      index === 0 ? 'border-zinc-900' : 'border-zinc-200'
-                    } hover:border-zinc-400 transition-colors`}
+                {allImages.map((image: string, index: number) => (
+                  <button
+                    key={index}
+                    onClick={() => setSelectedImage(index)}
+                    className={`relative w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-colors ${
+                      selectedImage === index ? 'border-teal-600' : 'border-gray-200'
+                    } hover:border-teal-400`}
                   >
                     <Image
-                      src={image.url}
-                      alt={image.altText || `Thumbnail ${index + 1}`}
+                      src={image}
+                      alt={`Thumbnail ${index + 1}`}
                       fill
                       className="object-cover"
                     />
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
           </div>
           
+          {/* Product Info */}
           <div>
-            <h1 className="text-3xl md:text-4xl font-bold text-zinc-900">{product.title}</h1>
+            <h1 className="text-3xl md:text-4xl font-bold text-gray-900">
+              {product.title.split('|')[0]?.trim() || product.title}
+            </h1>
             
-            <div className="mt-4 flex items-center gap-4">
-              <span className="text-3xl font-bold text-zinc-900">Rs {price}</span>
-              {inStock ? (
-                <span className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm font-semibold">
-                  <span className="w-2 h-2 bg-emerald-600 rounded-full"></span>
-                  In Stock
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm font-semibold">
-                  <span className="w-2 h-2 bg-red-600 rounded-full"></span>
-                  Out of Stock
+            <div className="mt-4">
+              <span className="text-3xl font-bold text-teal-600">
+                Rs {totalPrice.toLocaleString()}
+              </span>
+              {quantity > 1 && (
+                <span className="text-sm text-gray-400 ml-2">
+                  (Rs {unitPrice.toLocaleString()} × {quantity})
                 </span>
               )}
             </div>
             
             {product.description && (
               <div className="mt-6">
-                <h3 className="text-sm font-semibold text-zinc-500 uppercase tracking-wider mb-2">Description</h3>
-                <p className="text-zinc-600">{product.description}</p>
+                <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                  Description
+                </h3>
+                <p className="text-gray-600 leading-relaxed">
+                  {product.description}
+                </p>
               </div>
             )}
             
-            <div className="mt-8">
+            {/* Quantity Selector */}
+            <div className="mt-6">
+              <label className="text-sm font-medium text-gray-700 block mb-2">Quantity</label>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                  className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
+                  disabled={quantity <= 1}
+                >
+                  <Minus className="w-4 h-4 text-gray-600" />
+                </button>
+                <span className="w-12 text-center font-medium text-gray-800">{quantity}</span>
+                <button
+                  onClick={() => setQuantity(quantity + 1)}
+                  className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
+                >
+                  <Plus className="w-4 h-4 text-gray-600" />
+                </button>
+              </div>
+            </div>
+            
+            {/* Add to Cart Button */}
+            <div className="mt-6">
+              {errorMsg && (
+                <div className={`text-sm text-center mb-3 ${errorMsg.includes('✅') ? 'text-green-600' : 'text-red-500'}`}>
+                  {errorMsg}
+                </div>
+              )}
               <button
-                className={`w-full py-4 rounded-xl font-semibold text-lg text-white transition-all ${
-                  inStock 
-                    ? 'bg-gradient-to-r from-zinc-900 to-zinc-800 hover:from-zinc-800 hover:to-zinc-700 shadow-lg' 
-                    : 'bg-zinc-400 cursor-not-allowed'
+                onClick={handleAddToCart}
+                disabled={!inStock || isAdding}
+                className={`w-full py-4 rounded-xl font-semibold text-lg text-white transition-all flex items-center justify-center gap-2 ${
+                  inStock && !isAdding
+                    ? 'bg-teal-600 hover:bg-teal-700 shadow-lg' 
+                    : 'bg-gray-300 cursor-not-allowed'
                 }`}
-                disabled={!inStock}
               >
-                {inStock ? 'Add to Cart 🛒' : 'Out of Stock'}
+                <ShoppingBag className="w-5 h-5" />
+                {isAdding ? 'Adding...' : inStock ? 'Add to Cart' : 'Out of Stock'}
               </button>
               
-              <p className="text-sm text-zinc-500 text-center mt-3">
+              <p className="text-sm text-gray-400 text-center mt-3">
                 Free shipping on orders over Rs 5000
               </p>
             </div>
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

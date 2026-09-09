@@ -1,27 +1,132 @@
 @import "tailwindcss";
 
-/* Hide scrollbar for Chrome, Safari and Opera */
+/* Custom Theme Colors - Restored */
+@theme {
+  --color-teal-50: #f0fdfa;
+  --color-teal-100: #ccfbf1;
+  --color-teal-200: #99f6e4;
+  --color-teal-300: #5eead4;
+  --color-teal-400: #2dd4bf;
+  --color-teal-500: #14b8a6;
+  --color-teal-600: #0d9488;
+  --color-teal-700: #0f766e;
+  --color-teal-800: #115e59;
+  --color-teal-900: #134e4a;
+  
+  --color-cream-50: #fefcf5;
+  --color-cream-100: #fdf6e3;
+  --color-cream-200: #f9edc7;
+  --color-cream-300: #f5e4ab;
+  --color-cream-400: #f1db8f;
+  --color-cream-500: #edd273;
+  --color-cream-600: #e5c947;
+  --color-cream-700: #d4b820;
+  --color-cream-800: #b39b1b;
+  --color-cream-900: #8a7815;
+  
+  --color-coral-50: #fef6f3;
+  --color-coral-100: #fde8e3;
+  --color-coral-200: #fccfc7;
+  --color-coral-300: #fbb6ab;
+  --color-coral-400: #fa9d8f;
+  --color-coral-500: #f98473;
+  --color-coral-600: #f56b57;
+  --color-coral-700: #e8523b;
+  --color-coral-800: #d1391f;
+  --color-coral-900: #ba2003;
+}
+
+/* ===== GLOBAL FONT COLORS ===== */
+html, body {
+  color: #1a1a1a !important;
+  background-color: #fefcf5;
+}
+
+/* Headings - Teal */
+h1, h2, h3, h4, h5, h6 {
+  color: #0f766e !important;
+  font-weight: 700 !important;
+}
+
+/* Paragraphs - Dark Gray */
+p {
+  color: #1a1a1a !important;
+}
+
+/* Links - Coral */
+a {
+  color: #e8523b !important;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+a:hover {
+  color: #0f766e !important;
+}
+
+/* Product Titles - Teal */
+.product-title {
+  color: #0f766e !important;
+  font-weight: 600 !important;
+}
+
+/* Product Prices - Coral */
+.product-price {
+  color: #e8523b !important;
+  font-weight: 700 !important;
+}
+
+/* Labels - Teal */
+label {
+  color: #0f766e !important;
+  font-weight: 500;
+}
+
+/* Muted Text */
+.text-muted {
+  color: #6b7280 !important;
+}
+
+/* Buttons - Teal */
+.btn-primary {
+  background: #0f766e !important;
+  color: #ffffff !important;
+}
+.btn-primary:hover {
+  background: #134e4a !important;
+}
+
+/* In Stock Badge */
+.badge-instock {
+  background: #ccfbf1 !important;
+  color: #0f766e !important;
+}
+
+/* Placeholder */
+input::placeholder,
+textarea::placeholder {
+  color: #a1a1aa !important;
+}
+
+/* Selection */
+::selection {
+  background: #0f766e;
+  color: #ffffff;
+}
+
+/* Scrollbar */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
-
-/* Hide scrollbar for IE, Edge and Firefox */
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
-/* Add this to globals.css */
-.hero-image {
-  mix-blend-mode: multiply;
-  background: white;
+/* Remove any cream background from globals.css */
+html, body {
+  background-color: transparent !important;
 }
 
-.hero-image-dark {
-  mix-blend-mode: screen;
-  background: black;
-}
-/* In globals.css */
-.hero-image-container img {
-  mix-blend-mode: multiply;
-  background: white !important;
+/* Remove any other cream colors */
+.bg-cream-50 {
+  background-color: transparent !important;
 }
